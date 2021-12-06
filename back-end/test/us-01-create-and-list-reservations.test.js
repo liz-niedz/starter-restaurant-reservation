@@ -218,6 +218,7 @@ describe("US-01 - Create and list reservations", () => {
         .send({ data });
 
       expect(response.body.error).toContain("reservation_date");
+      console.log(response);
       expect(response.status).toBe(400);
     });
 
@@ -274,6 +275,7 @@ describe("US-01 - Create and list reservations", () => {
         .send({ data });
 
       expect(response.status).toBe(400);
+      console.log(response);
       expect(response.body.error).toContain("reservation_time");
     });
 

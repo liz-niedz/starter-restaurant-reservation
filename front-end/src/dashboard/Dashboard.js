@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { listReservations } from "../utils/api";
 import ErrorAlert from "../layout/ErrorAlert";
 
@@ -13,10 +14,13 @@ function Dashboard({ date }) {
   const [reservationsError, setReservationsError] = useState(null);
 
   useEffect(loadDashboard, [date]);
+  const paramDate = useParams()
+  console.log(paramDate)
 
   function loadDashboard() {
     const abortController = new AbortController();
     setReservationsError(null);
+    console.log(date)
     listReservations({ date }, abortController.signal)
       .then(setReservations)
       .catch(setReservationsError);
