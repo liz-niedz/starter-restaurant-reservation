@@ -3,12 +3,16 @@ const asyncErrorBoundary = require('../errors/asyncErrorBoundary')
 const hasProperties = require('../errors/hasProperties')
 
 const VALID_PROPERTIES = [
+  'reservation_id',
   'first_name',
   'last_name',
   'mobile_number',
   'reservation_date',
   'reservation_time',
-  'people'
+  'people',
+  'status',
+  'created_at',
+  'updated_at'
 ]
 
 function hasOnlyValidProperties (req, res, next) {
@@ -35,35 +39,9 @@ const hasRequiredProperties = hasProperties(
   'people'
 )
 
-/*function hasValidInputs (req, res, next) {
-  const { people, reservation_date, reservation_time } = req.body.reservation.data
-  let invalidInputs = 'Invalid input(s):'
-
-  if (typeof people !== 'number') {
-    invalidInputs = invalidInputs.concat('people')
-  }
-
-  if (!reservationDateIsValid(reservation_date)) {
-    invalidInputs = invalidInputs.concat('reservation_date')
-  }
-
-  if (!reservationTimeIsValid(reservation_time)) {
-    invalidInputs = invalidInputs.concat('reservation_time')
-  }
-
-  if (invalidInputs !== 'Invalid inputs(s):') {
-    return next({
-      status: 400,
-      message: invalidInputs
-    })
-  }
-  return next()
-} */
-
 function dateIsValid (req, res, next) {
   const { reservation_date } = req.body.data
   const isDate = Date.parse(reservation_date)
-  console.log(reservation_date)
 
   if (!Number.isNaN(isDate)) {
     return next()
@@ -88,16 +66,20 @@ function reservationTimeIsValid (req, res, next) {
 }
 
 async function reservationExists (req, res, next) {
-  const reservation = await service.read(req.params.reservationId)
+  const { reservationId } = req.params
+  const reservation = await service.read(reservationId)
   if (reservation) {
     res.locals.reservation = reservation
     return next()
   }
-  next({ status: 400, message: 'Reservation cannot be found.' })
+  next({
+    status: 404,
+    message: `Resevation id ${reservationId} cannot be found.`
+  })
 }
 
 function peopleIsNum (req, res, next) {
-  const people = req.body.data.people
+  let { people } = req.body.data
   if (typeof people !== 'number' || people < 0) {
     next({
       status: 400,
@@ -117,7 +99,7 @@ function notInPast (req, res, next) {
   } else {
     return next({
       status: 400,
-      message: 'Reservation must be made in the future.'
+      message: 'reservation_time must be made in the future.'
     })
   }
 }
@@ -137,7 +119,7 @@ function notTuesday (req, res, next) {
 
 function timeDuringOpenHours (req, res, next) {
   const { reservation_time } = req.body.data
-  if (reservation_time < '10:30' || reservation_time > '21:30') {
+  if (reservation_time < '10:30:00' || reservation_time > '21:30:00') {
     next({
       status: 400,
       message: 'Reservation time must be made between 10:30 am and 9:30 pm.'
@@ -147,20 +129,73 @@ function timeDuringOpenHours (req, res, next) {
   }
 }
 
+function statusIsBooked (req, res, next) {
+  const { status } = req.body.data
+  if (status === 'booked' || !status) {
+    return next()
+  }
+  next({
+    status: 400,
+    message: `Reservation status is ${status}`
+  })
+}
+
+function statusIsNotFinished(req, res, next) {
+  const { status } = res.locals.reservation;
+  if(status != "finished") {
+    return next()
+  }
+  next({
+    status: 400,
+    message: `Status cannot be updated if it is finished.`
+  })
+}
+
+function validStatus(req, res, next) {
+  const { status } = req.body.data;
+  if(status === "booked" || status === "seated" || status === "finished" || status === "cancelled") {
+    return next()
+  }
+  next({
+    status: 400,
+    message: `${status} is not a valid status.`
+  })
+}
+
 async function create (req, res, next) {
-  const data = await service.create(req.body.data)
-  res.status(201).json({ data })
+  const newReservation = { ...req.body.data }
+  const data = await service.create(newReservation)
+  res.status(201).json({ data: data })
 }
 
 async function list (req, res) {
+  const { date, mobile_number } = req.query
+  let data
+  if(mobile_number) {
+    data = await service.listByPhone(mobile_number)
+  }
+  else if (date) {
+    data = await service.listByDate(date)
+  } else {
+    data = await service.list()
+  }
   res.json({
-    data: await service.list(req.query.date)
+    data: data
   })
 }
 
 async function read (req, res) {
-  const reservation = await service.read(req.params.reservationId)
-  res.json({ data: reservation});
+  const { reservation: data } = res.locals
+  res.json({ data })
+}
+
+async function update (req, res) {
+  const updatedReservation = {
+    ...req.body.data,
+    reservation_id: res.locals.reservation.reservation_id
+  }
+  const data = await service.update(updatedReservation)
+  res.status(200).json({ data })
 }
 
 module.exports = {
@@ -175,6 +210,26 @@ module.exports = {
     notInPast,
     notTuesday,
     timeDuringOpenHours,
+    statusIsBooked,
     asyncErrorBoundary(create)
+  ],
+  update: [
+    reservationExists,
+    hasOnlyValidProperties,
+    hasRequiredProperties,
+    dateIsValid,
+    //reservationTimeIsValid,
+    peopleIsNum,
+    notInPast,
+    notTuesday,
+    timeDuringOpenHours,
+    statusIsBooked,
+    asyncErrorBoundary(update)
+  ],
+  updateStatus: [
+    reservationExists,
+    statusIsNotFinished,
+    validStatus,
+    asyncErrorBoundary(update)
   ]
 }
