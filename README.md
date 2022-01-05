@@ -1,7 +1,4 @@
 
-> At this point, the customers will not access the system online.
-
-
 ### Restaurant Reservations
 
 ### US-01 Create and list reservations
